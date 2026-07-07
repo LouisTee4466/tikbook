@@ -1,9 +1,11 @@
-import { complete, llmModel } from "@/lib/llm";
+import { complete, llmModel, RateLimitError } from "@/lib/llm";
 import { SUMMARY_PAGE_COUNT, type SourceBook, type SummaryPage } from "@/lib/types";
 
+export { llmModel };
+
 // 固定的 10 页结构：每本书都按同一骨架生成，阅读体验一致。
-// 逐页生成（每页一次小请求，纯文本输出）而不是一次性生成 10 页 JSON——
-// 对免费小模型来说稳健得多：没有 JSON 解析失败，单页失败只需重试该页。
+// 逐页小批量生成：免费额度（每分钟 token 限制）下，一次只生成少量页，
+// 由 /api/generate 分多次调用接力完成。
 const PAGE_PLAN: { title: string; instruction: string }[] = [
   { title: "书籍概览", instruction: "介绍这本书是什么、它的核心承诺、适合谁读、为什么值得读。" },
   { title: "作者与背景", instruction: "介绍作者的经历与专业背景，以及这本书诞生的时代背景或动机。" },
@@ -21,7 +23,7 @@ const SYSTEM_PROMPT =
   "你是一位资深的中文书评人和读书栏目主笔。你写的摘要具体、有细节、忠于原书。" +
   "对不确定的细节保持概括而不编造。直接输出正文内容，不要任何开场白、标题重复或结尾客套。";
 
-function buildContext(book: SourceBook, condensedNotes: string | null): string {
+function buildContext(book: SourceBook): string {
   const lines = [
     `书名：${book.title}`,
     `作者：${book.author}`,
@@ -30,24 +32,23 @@ function buildContext(book: SourceBook, condensedNotes: string | null): string {
     book.topics.length ? `主题：${book.topics.join("、")}` : null,
     book.description ? `一句话定位：${book.description}` : null,
   ].filter(Boolean);
-  let ctx = lines.join("\n");
-  if (condensedNotes) {
-    ctx += `\n\n以下是全书原文的浓缩笔记，请以此为准：\n${condensedNotes}`;
-  } else {
-    ctx += "\n\n请基于你对这本书的了解来写。这是一本知名的书，请写得具体：引用书中真实的概念、例子和结构。";
-  }
-  return ctx;
+  return (
+    lines.join("\n") +
+    "\n\n请基于你对这本书的了解来写。这是一本知名的书，请写得具体：引用书中真实的概念、例子和结构。"
+  );
 }
 
-// 生成单独一页。previousTitles 让模型知道前文写过什么，避免重复。
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// 生成单独一页。撞到限流时在本次调用内等待一次再重试（等待上限 25s，
+// 以免超出 serverless 时长）；仍失败则抛出 RateLimitError 交由上层调度。
 async function generatePage(
   book: SourceBook,
   pageIndex: number,
-  context: string,
   previousTitles: string[],
 ): Promise<SummaryPage> {
   const plan = PAGE_PLAN[pageIndex];
-  const user = `${context}
+  const user = `${buildContext(book)}
 
 任务：为这本书的 10 页导读中的「第 ${pageIndex + 1} 页：${plan.title}」写正文。
 本页要求：${plan.instruction}
@@ -55,58 +56,34 @@ ${previousTitles.length ? `前面已写过的页：${previousTitles.join("、")}
 篇幅 250-400 字，分 2-4 个自然段（金句/行动清单页用列表形式，每行一条）。直接输出正文。`;
 
   let body = "";
-  // 单页重试一次；两次都失败则抛给上层换书
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      body = (await complete(SYSTEM_PROMPT, user, 1500)).trim();
-      if (body.length >= 50) break; // 太短视为失败
+      body = (await complete(SYSTEM_PROMPT, user, 1200)).trim();
+      if (body.length >= 50) break;
     } catch (e) {
-      if (attempt === 1) throw e;
+      if (e instanceof RateLimitError && attempt < 2 && e.retryAfterMs <= 25_000) {
+        await sleep(e.retryAfterMs + 500);
+        continue;
+      }
+      if (attempt >= 2) throw e;
     }
   }
-  if (body.length < 50) throw new Error(`Page ${pageIndex + 1} generation too short`);
+  if (body.length < 50) throw new Error(`第 ${pageIndex + 1} 页生成内容过短`);
   return { page: pageIndex + 1, title: plan.title, body };
 }
 
-// 全文书的 map 步骤：把长文本压缩成笔记（免费额度友好：顺序执行）。
-async function condenseFullText(book: SourceBook, fullText: string): Promise<string> {
-  const CHUNK = 40_000;
-  const MAX_CHUNKS = 8;
-  const chunks: string[] = [];
-  for (let i = 0; i < fullText.length && chunks.length < MAX_CHUNKS; i += CHUNK) {
-    chunks.push(fullText.slice(i, i + CHUNK));
-  }
-  const notes: string[] = [];
-  for (let idx = 0; idx < chunks.length; idx++) {
-    notes.push(
-      await complete(
-        "你是严谨的阅读助手。把下面的书籍节选压缩成信息密集的中文要点笔记，覆盖情节/论点、关键概念与值得引用的段落。直接输出要点。",
-        `书名：《${book.title}》（${book.author}）。节选 ${idx + 1}/${chunks.length}：\n\n${chunks[idx]}`,
-        1000,
-      ),
-    );
-  }
-  return notes.map((n, i) => `【第 ${i + 1} 部分】\n${n}`).join("\n\n");
-}
-
-export interface SummarizeProgress {
-  (pageDone: number, total: number): void;
-}
-
-// 入口：为一本书生成 10 页摘要（逐页），可选进度回调。
-export async function summarizeBook(
+// 从 existing 之后继续生成最多 count 页，返回新增的页。
+export async function generateNextPages(
   book: SourceBook,
-  onProgress?: SummarizeProgress,
-): Promise<{ pages: SummaryPage[]; model: string }> {
-  const condensed =
-    book.hasFullText && book.fullText ? await condenseFullText(book, book.fullText) : null;
-  const context = buildContext(book, condensed);
-
-  const pages: SummaryPage[] = [];
-  for (let i = 0; i < SUMMARY_PAGE_COUNT; i++) {
-    const page = await generatePage(book, i, context, pages.map((p) => p.title));
-    pages.push(page);
-    onProgress?.(i + 1, SUMMARY_PAGE_COUNT);
+  existing: SummaryPage[],
+  count: number,
+): Promise<SummaryPage[]> {
+  const added: SummaryPage[] = [];
+  const titles = existing.map((p) => p.title);
+  for (let i = existing.length; i < Math.min(existing.length + count, SUMMARY_PAGE_COUNT); i++) {
+    const page = await generatePage(book, i, titles);
+    added.push(page);
+    titles.push(page.title);
   }
-  return { pages, model: llmModel() };
+  return added;
 }

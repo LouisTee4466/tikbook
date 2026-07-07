@@ -1,7 +1,7 @@
 import Link from "next/link";
 import FeedbackButtons from "@/components/FeedbackButtons";
 import RunButton from "@/components/RunButton";
-import { getLatestDailyPick, getPreferenceStatus } from "@/lib/queries";
+import { asPages, getLatestDailyPick, getPreferenceStatus } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,7 @@ function PreferenceBar({
 
 export default async function Home() {
   const [pick, pref] = await Promise.all([getLatestDailyPick(), getPreferenceStatus()]);
+  const incomplete = Boolean(pick && pick.books.some(({ book }) => !book.summary?.complete));
 
   return (
     <div className="container">
@@ -60,7 +61,7 @@ export default async function Home() {
         <div className="section-title" style={{ margin: 0 }}>
           {pick ? `${pick.date} · 今日三本` : "还没有今日选书"}
         </div>
-        <RunButton hasPick={Boolean(pick)} />
+        <RunButton hasPick={Boolean(pick)} incomplete={incomplete} />
       </div>
 
       {!pick ? (
@@ -94,9 +95,15 @@ export default async function Home() {
                     bookId={book.id}
                     initial={(book.feedback?.value as "like" | "dislike") ?? null}
                   />
-                  <Link href={`/book/${book.id}`} style={{ fontSize: 13, color: "var(--accent)" }}>
-                    阅读 10 页 →
-                  </Link>
+                  {book.summary?.complete ? (
+                    <Link href={`/book/${book.id}`} style={{ fontSize: 13, color: "var(--accent)" }}>
+                      阅读 10 页 →
+                    </Link>
+                  ) : (
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                      ✍️ 生成中 {asPages(book.summary?.pages).length}/10
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,8 +1,6 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { BOOK_POOL, type PoolBook } from "@/data/bookPool";
-import { selectDaily, type Selection } from "@/lib/select";
-import { summarizeBook } from "@/lib/summarize";
+import { selectDaily } from "@/lib/select";
 import type { SourceBook } from "@/lib/types";
 
 export function todayStr(now: Date): string {
@@ -29,14 +27,6 @@ async function pickedKeys(): Promise<Set<string>> {
   return new Set(picked.map((p) => `${p.book.source}:${p.book.externalId}`));
 }
 
-// 候选 = 精选书池里还没被选过的书。零网络依赖，永不被限流。
-async function gatherCandidates(): Promise<SourceBook[]> {
-  const exclude = await pickedKeys();
-  return BOOK_POOL.map(poolToSource).filter(
-    (b) => !exclude.has(`${b.source}:${b.externalId}`),
-  );
-}
-
 // 封面：尽力从 Google Books 找一张；失败就无封面（不阻塞主流程）。
 async function tryFetchCover(book: SourceBook): Promise<string | undefined> {
   try {
@@ -57,122 +47,78 @@ async function tryFetchCover(book: SourceBook): Promise<string | undefined> {
   }
 }
 
-async function persistSelection(sel: Selection): Promise<string> {
-  const { book } = sel;
-  const existing = await prisma.book.findUnique({
-    where: { source_externalId: { source: book.source, externalId: book.externalId } },
-    include: { summary: true },
-  });
-
-  let bookId: string;
-  if (existing) {
-    bookId = existing.id;
-  } else {
-    const coverUrl = book.coverUrl ?? (await tryFetchCover(book));
-    const created = await prisma.book.create({
-      data: {
-        title: book.title,
-        author: book.author,
-        source: book.source,
-        externalId: book.externalId,
-        coverUrl,
-        description: book.description,
-        hasFullText: book.hasFullText,
-        genres: book.genres,
-        topics: book.topics,
-        publishYear: book.publishYear,
-      },
-    });
-    bookId = created.id;
-  }
-
-  if (!existing?.summary) {
-    const { pages, model } = await summarizeBook(book);
-    await prisma.summary.create({
-      data: { bookId, pages: pages as unknown as Prisma.InputJsonValue, model },
-    });
-  }
-  return bookId;
-}
-
-export interface RunResult {
+export interface EnsureResult {
   date: string;
   created: boolean;
   bookIds: string[];
-  failures: string[];
 }
 
-// 每日流水线（幂等；force 可重新生成当天）。
-// 每本书独立容错：某本摘要失败时自动换下一本候补，不会全盘报废。
-export async function runDailyPipeline(
+// 第一阶段（快，不调用 LLM）：确保今天已选出 3 本书并入库。
+// 摘要由 /api/generate 分批接力生成（见 src/lib/generate.ts）。
+export async function ensureDailyPick(
   now: Date,
   opts: { force?: boolean } = {},
-): Promise<RunResult> {
+): Promise<EnsureResult> {
   const date = todayStr(now);
 
-  const existingPick = await prisma.dailyPick.findUnique({
+  const existing = await prisma.dailyPick.findUnique({
     where: { date },
     include: { books: true },
   });
-  if (existingPick && !opts.force) {
-    return {
-      date,
-      created: false,
-      bookIds: existingPick.books.map((b) => b.bookId),
-      failures: [],
-    };
+  if (existing && !opts.force) {
+    return { date, created: false, bookIds: existing.books.map((b) => b.bookId) };
   }
 
   const seed = Math.floor(now.getTime() / 86_400_000);
-  const candidates = await gatherCandidates();
-  if (candidates.length < 3) {
-    throw new Error(`书池即将耗尽（仅剩 ${candidates.length} 本未选）。请在 src/data/bookPool.ts 中追加书目。`);
-  }
-
-  // 选出主选 3 本 + 候补队列
-  const selections = await selectDaily(candidates, seed);
-  const chosen = new Set(selections.map((s) => `${s.book.source}:${s.book.externalId}`));
-  const substitutes = candidates.filter(
-    (c) => !chosen.has(`${c.source}:${c.externalId}`),
+  const exclude = await pickedKeys();
+  const candidates = BOOK_POOL.map(poolToSource).filter(
+    (b) => !exclude.has(`${b.source}:${b.externalId}`),
   );
-
-  const succeeded: { sel: Selection; bookId: string }[] = [];
-  const failures: string[] = [];
-  let subIdx = 0;
-
-  for (const sel of selections) {
-    let current: Selection | null = sel;
-    // 失败最多换 2 本候补
-    for (let attempt = 0; attempt < 3 && current; attempt++) {
-      const trying: Selection = current;
-      try {
-        const bookId = await persistSelection(trying);
-        succeeded.push({ sel: trying, bookId });
-        current = null;
-      } catch (e) {
-        failures.push(`${trying.book.title}: ${String(e).slice(0, 200)}`);
-        console.error(`summary failed for ${trying.book.title}, trying substitute:`, e);
-        const sub = substitutes[subIdx++];
-        current = sub ? { book: sub, reason: trying.reason } : null;
-      }
-    }
-  }
-
-  if (succeeded.length === 0) {
+  if (candidates.length < 3) {
     throw new Error(
-      `今日三本全部生成失败。请检查 LLM 配置（LLM_PROVIDER=${process.env.LLM_PROVIDER || "ollama"}）。首个错误：${failures[0] ?? "unknown"}`,
+      `书池即将耗尽（仅剩 ${candidates.length} 本未选）。请在 src/data/bookPool.ts 中追加书目。`,
     );
   }
 
-  if (existingPick) {
-    await prisma.dailyPick.delete({ where: { id: existingPick.id } });
+  const selections = await selectDaily(candidates, seed);
+
+  const bookIds: string[] = [];
+  for (const sel of selections) {
+    const { book } = sel;
+    const existingBook = await prisma.book.findUnique({
+      where: { source_externalId: { source: book.source, externalId: book.externalId } },
+    });
+    if (existingBook) {
+      bookIds.push(existingBook.id);
+    } else {
+      const coverUrl = await tryFetchCover(book);
+      const created = await prisma.book.create({
+        data: {
+          title: book.title,
+          author: book.author,
+          source: book.source,
+          externalId: book.externalId,
+          coverUrl,
+          description: book.description,
+          hasFullText: book.hasFullText,
+          genres: book.genres,
+          topics: book.topics,
+          publishYear: book.publishYear,
+        },
+      });
+      bookIds.push(created.id);
+    }
+  }
+
+  if (existing) {
+    await prisma.dailyPick.delete({ where: { id: existing.id } });
   }
   await prisma.dailyPick.create({
     data: {
       date,
       books: {
-        create: succeeded.map(({ sel, bookId }, i) => ({
-          bookId,
+        create: selections.map((sel, i) => ({
+          bookId: bookIds[i],
           reason: sel.reason,
           position: i,
         })),
@@ -180,5 +126,5 @@ export async function runDailyPipeline(
     },
   });
 
-  return { date, created: true, bookIds: succeeded.map((s) => s.bookId), failures };
+  return { date, created: true, bookIds };
 }

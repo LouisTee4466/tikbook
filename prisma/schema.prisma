@@ -32,13 +32,17 @@ model Book {
 }
 
 model Summary {
-  id        String   @id @default(cuid())
-  bookId    String   @unique
-  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  // 10 pages of structured summary: [{ page, title, body }]
+  id        String    @id @default(cuid())
+  bookId    String    @unique
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Pages generated so far: [{ page, title, body }] — filled incrementally
+  // in small batches to stay under free-tier LLM rate limits.
   pages     Json
+  complete  Boolean   @default(false)
+  // Soft lock so concurrent generation drivers don't duplicate work.
+  lockedAt  DateTime?
   model     String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 model Feedback {

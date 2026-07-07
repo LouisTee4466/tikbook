@@ -34,6 +34,33 @@ function requireKey(name: string): string {
   return v;
 }
 
+// Free tiers rate-limit aggressively (tokens/requests per minute).
+export class RateLimitError extends Error {
+  retryAfterMs: number;
+  constructor(message: string, retryAfterMs: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+// Parse "Please try again in 7.66s" (Groq style) or a Retry-After header.
+function parseRetryMs(bodyText: string, headers: Headers): number {
+  const header = headers.get("retry-after");
+  if (header && Number(header) > 0) return Math.ceil(Number(header) * 1000);
+  const m = bodyText.match(/try again in ([\d.]+)m?s/i);
+  if (m) return Math.ceil(parseFloat(m[1]) * 1000);
+  return 15_000; // sensible default for per-minute windows
+}
+
+async function throwForStatus(res: Response, label: string): Promise<never> {
+  const text = await res.text();
+  if (res.status === 429) {
+    throw new RateLimitError(`${label} 429: ${text.slice(0, 300)}`, parseRetryMs(text, res.headers));
+  }
+  throw new Error(`${label} ${res.status}: ${text.slice(0, 300)}`);
+}
+
 async function ollama(system: string, user: string, maxTokens: number): Promise<string> {
   const host = process.env.OLLAMA_HOST || "http://localhost:11434";
   const res = await fetch(`${host}/api/chat`, {
@@ -49,7 +76,7 @@ async function ollama(system: string, user: string, maxTokens: number): Promise<
       ],
     }),
   });
-  if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
+  if (!res.ok) await throwForStatus(res, "Ollama");
   const data = (await res.json()) as { message?: { content?: string } };
   return data.message?.content ?? "";
 }
@@ -77,7 +104,7 @@ async function openAiCompatible(
       ],
     }),
   });
-  if (!res.ok) throw new Error(`LLM ${res.status}: ${await res.text()}`);
+  if (!res.ok) await throwForStatus(res, "LLM");
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   return data.choices?.[0]?.message?.content ?? "";
 }
@@ -94,7 +121,7 @@ async function gemini(system: string, user: string, maxTokens: number): Promise<
       generationConfig: { maxOutputTokens: maxTokens },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  if (!res.ok) await throwForStatus(res, "Gemini");
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
