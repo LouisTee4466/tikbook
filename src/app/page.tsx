@@ -65,9 +65,9 @@ export default async function Home() {
 
       {!pick ? (
         <div className="empty">
-          点击右上角「生成今日三本」开始。
+          点击右上角「生成今日三本」开始，大约需要 1-2 分钟。
           <br />
-          （需要先在 <code>.env</code> 里配置 <code>ANTHROPIC_API_KEY</code>）
+          之后每天会自动生成，无需手动操作。
         </div>
       ) : (
         <div className="grid" style={{ marginTop: 16 }}>
