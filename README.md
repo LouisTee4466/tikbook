@@ -82,18 +82,16 @@ npm run run:daily
 
 **第 3 步 · 部署（Vercel，免费）**
 1. 到 [vercel.com](https://vercel.com) 用 GitHub 登录 → **Add New Project** → 选这个仓库（分支选 `claude/book-summary-app-plan-n02vpw` 或先合并到 main）
-2. 在 **Environment Variables** 填 4 个变量：
+2. 在 **Environment Variables** 填 3 个变量：
    | 变量 | 值 |
    |---|---|
    | `DATABASE_URL` | 第 1 步的 Neon 连接串 |
    | `LLM_PROVIDER` | `groq` |
    | `GROQ_API_KEY` | 第 2 步的 key |
-   | `CRON_SECRET` | 随便一串密码 |
-3. 点 Deploy，等 2 分钟拿到 `https://xxx.vercel.app`
-4. 初始化数据库表（本机执行一次）：
-   ```bash
-   DATABASE_URL="你的Neon连接串" npx prisma db push
-   ```
+
+   （可选加 `CRON_SECRET`=随便一串密码，用于保护定时任务接口）
+3. 点 Deploy，等 2 分钟拿到 `https://xxx.vercel.app`。
+   数据库表会在部署时**自动创建**（`vercel-build` 脚本里包含 `prisma db push`），无需任何命令行操作。
 
 **完成后：**
 - 📱 手机打开 `https://xxx.vercel.app`，加到主屏幕就像个 App
