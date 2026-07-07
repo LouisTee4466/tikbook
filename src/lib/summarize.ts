@@ -1,13 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { complete, llmModel } from "@/lib/llm";
 import { SUMMARY_PAGE_COUNT, type SourceBook, type SummaryPage } from "@/lib/types";
-
-const MODEL = process.env.SUMMARY_MODEL || "claude-sonnet-5";
-
-function client(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
-  return new Anthropic({ apiKey });
-}
 
 // Fixed 10-page structure so every book reads consistently.
 const PAGE_PLAN: { title: string; instruction: string }[] = [
@@ -45,19 +37,6 @@ function parsePages(text: string): SummaryPage[] {
     }));
 }
 
-async function complete(system: string, user: string, maxTokens = 4000): Promise<string> {
-  const msg = await client().messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: user }],
-  });
-  return msg.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
 // Map step: condense a long text into chunk notes so we stay within context.
 async function condenseFullText(book: SourceBook, fullText: string): Promise<string> {
   const CHUNK = 40_000; // characters per chunk
@@ -67,15 +46,19 @@ async function condenseFullText(book: SourceBook, fullText: string): Promise<str
     chunks.push(fullText.slice(i, i + CHUNK));
   }
 
-  const notes = await Promise.all(
-    chunks.map((chunk, idx) =>
-      complete(
+  // Process chunks sequentially. Free tiers (Groq/Gemini) have low
+  // requests-per-minute limits, and a local Ollama model serves one at a time
+  // anyway — so firing all chunks in parallel would only cause rate-limit errors.
+  const notes: string[] = [];
+  for (let idx = 0; idx < chunks.length; idx++) {
+    notes.push(
+      await complete(
         "You are a meticulous reading assistant. Summarize the excerpt into dense bullet notes capturing plot/argument, key ideas, and notable passages. No preamble.",
-        `Book: "${book.title}" by ${book.author}.\nExcerpt ${idx + 1}/${chunks.length}:\n\n${chunk}`,
+        `Book: "${book.title}" by ${book.author}.\nExcerpt ${idx + 1}/${chunks.length}:\n\n${chunks[idx]}`,
         1200,
       ),
-    ),
-  );
+    );
+  }
   return notes.map((n, i) => `## Section ${i + 1}\n${n}`).join("\n\n");
 }
 
@@ -129,5 +112,5 @@ export async function summarizeBook(
       pages.push({ page: i + 1, title: PAGE_PLAN[i].title, body: "（本页内容生成不完整。）" });
     }
   }
-  return { pages, model: MODEL };
+  return { pages, model: llmModel() };
 }

@@ -14,7 +14,18 @@
 
 ## 技术栈
 
-Next.js (App Router) · TypeScript · Prisma · SQLite（本地）/ Postgres（生产）· Anthropic Claude API · Vercel Cron
+Next.js (App Router) · TypeScript · Prisma · SQLite（本地）/ Postgres（生产）· 可插拔 LLM（默认免费）· Vercel Cron
+
+## LLM 提供方（免费优先，无需付费）
+
+摘要生成走可插拔的 LLM 层（`src/lib/llm.ts`），用 `LLM_PROVIDER` 选择：
+
+| 提供方 | 费用 | 说明 |
+|---|---|---|
+| `ollama`（默认）| **免费 / 本地** | 无需 key、无限量。装 [Ollama](https://ollama.com) 后 `ollama pull llama3.1:8b` |
+| `groq` | **免费额度** | 极快，[免费注册](https://console.groq.com)拿 `GROQ_API_KEY` |
+| `gemini` | **免费额度** | [Google AI Studio](https://aistudio.google.com/apikey) 拿 `GEMINI_API_KEY` |
+| `openai` / `anthropic` | 付费（可选）| 有额度就用，不用不碰 |
 
 ## 本地运行
 
@@ -22,15 +33,20 @@ Next.js (App Router) · TypeScript · Prisma · SQLite（本地）/ Postgres（�
 # 1. 安装依赖
 npm install
 
-# 2. 配置环境变量
+# 2. 装一个免费的本地模型（默认方案，零成本）
+#    从 https://ollama.com 安装 Ollama，然后：
+ollama pull llama3.1:8b     # ollama serve 会在后台运行
+
+# 3. 配置环境变量
 cp .env.example .env
-#   填入 ANTHROPIC_API_KEY（必需）
+#   默认 LLM_PROVIDER=ollama，不用填任何 key
+#   想用 Groq/Gemini 免费额度：改 LLM_PROVIDER 并填对应 key
 #   GOOGLE_BOOKS_API_KEY 可选；不填则只用 Gutenberg 公版书
 
-# 3. 初始化数据库
+# 4. 初始化数据库
 npm run db:push
 
-# 4. 启动
+# 5. 启动
 npm run dev
 # 打开 http://localhost:3000，点右上角「生成今日三本」
 
@@ -51,6 +67,7 @@ npm run run:daily
 
 - 选书与偏好算法：`src/lib/select.ts`
 - 摘要生成（map-reduce）：`src/lib/summarize.ts`
+- 可插拔 LLM 层（免费优先）：`src/lib/llm.ts`
 - 每日流水线编排：`src/lib/pipeline.ts`
 - 书源适配器：`src/lib/sources/`
 - 翻页阅读器：`src/app/book/[id]/Reader.tsx`
