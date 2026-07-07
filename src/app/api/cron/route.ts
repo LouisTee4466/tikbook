@@ -21,7 +21,11 @@ export async function GET(req: Request) {
 
     const base =
       process.env.APP_URL ??
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : null);
     if (base) {
       after(async () => {
         await fetch(`${base}/api/generate?chain=1`, { method: "POST" }).catch(() => {});

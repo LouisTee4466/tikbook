@@ -6,9 +6,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 function selfUrl(path: string): string | null {
+  // 优先用公开的正式域名——部署专属的 VERCEL_URL 可能被 Vercel 访问保护拦截
   const base =
     process.env.APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : null);
   return base ? `${base}${path}` : null;
 }
 
