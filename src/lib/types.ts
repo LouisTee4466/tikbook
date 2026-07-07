@@ -9,7 +9,7 @@ export const SUMMARY_PAGE_COUNT = 10;
 
 // Normalized book coming out of a source adapter, before it is persisted.
 export interface SourceBook {
-  source: "gutenberg" | "googlebooks";
+  source: "pool" | "gutenberg" | "googlebooks";
   externalId: string;
   title: string;
   author: string;

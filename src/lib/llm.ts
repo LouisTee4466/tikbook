@@ -16,7 +16,7 @@ export function llmProvider(): Provider {
 }
 
 const DEFAULT_MODEL: Record<Provider, string> = {
-  ollama: "llama3.1:8b",
+  ollama: "qwen2.5:7b", // strongest small local model for Chinese output
   groq: "llama-3.3-70b-versatile",
   gemini: "gemini-2.0-flash",
   openai: "gpt-4o-mini",
