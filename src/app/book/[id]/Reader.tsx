@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import FeedbackButtons from "@/components/FeedbackButtons";
 import type { SummaryPage } from "@/lib/types";
 
@@ -42,6 +42,22 @@ export default function Reader({
     return () => window.removeEventListener("keydown", onKey);
   }, [index, go]);
 
+  // 手机滑动翻页：水平滑动超过 50px 且明显大于垂直位移时翻页
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      go(dx < 0 ? index + 1 : index - 1);
+    }
+  };
+
   const cycleSize = () => setSize((s) => (s === "s" ? "m" : s === "m" ? "l" : "s"));
   const progress = Math.round(((index + 1) / total) * 100);
   const onCover = index === 0;
@@ -67,7 +83,7 @@ export default function Reader({
         </div>
       </div>
 
-      <div className="reader-stage">
+      <div className="reader-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {tocOpen && (
           <div className="toc">
             <h3>目录</h3>

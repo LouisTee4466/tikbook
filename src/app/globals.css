@@ -361,6 +361,39 @@ a {
   transition: width 0.2s ease;
 }
 
+/* ---------- Mobile reader ---------- */
+@media (max-width: 640px) {
+  .pager {
+    width: 34px;
+    font-size: 26px;
+  }
+  .page {
+    padding: 26px 14px 28px;
+  }
+  .page-inner h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .page-inner p {
+    font-size: 17px;
+  }
+  .reader.size-l .page-inner p {
+    font-size: 19px;
+  }
+  .reader-top {
+    padding: 10px 12px;
+  }
+  .reader-top > div:nth-child(2) {
+    max-width: 45vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .toc {
+    width: 82vw;
+  }
+}
+
 /* ---------- TOC drawer ---------- */
 .toc {
   position: absolute;

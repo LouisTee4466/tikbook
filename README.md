@@ -27,26 +27,22 @@ Next.js (App Router) · TypeScript · Prisma · SQLite（本地）/ Postgres（�
 | `gemini` | **免费额度** | [Google AI Studio](https://aistudio.google.com/apikey) 拿 `GEMINI_API_KEY` |
 | `openai` / `anthropic` | 付费（可选）| 有额度就用，不用不碰 |
 
-## 本地运行
+## 本地运行（开发/调试用；手机使用请看下面的部署章节）
 
 ```bash
 # 1. 安装依赖
 npm install
 
-# 2. 装一个免费的本地模型（默认方案，零成本；qwen2.5 中文最佳）
-#    从 https://ollama.com 安装 Ollama，然后：
-ollama pull qwen2.5:7b      # ollama serve 会在后台运行
-
-# 3. 配置环境变量
+# 2. 配置环境变量
 cp .env.example .env
-#   默认 LLM_PROVIDER=ollama，不用填任何 key
-#   想用 Groq/Gemini 免费额度：改 LLM_PROVIDER 并填对应 key
-#   GOOGLE_BOOKS_API_KEY 可选；不填则只用 Gutenberg 公版书
+#   DATABASE_URL：填 Neon 免费连接串（见部署章节第 1 步）
+#   LLM：本地推荐 Ollama（ollama pull qwen2.5:7b，无需 key），
+#        或改 LLM_PROVIDER=groq 用免费云端额度
 
-# 4. 初始化数据库
+# 3. 初始化数据库
 npm run db:push
 
-# 5. 启动
+# 4. 启动
 npm run dev
 # 打开 http://localhost:3000，点右上角「生成今日三本」
 
@@ -72,11 +68,37 @@ npm run run:daily
 - 书源适配器：`src/lib/sources/`
 - 翻页阅读器：`src/app/book/[id]/Reader.tsx`
 
-## 部署到 Vercel
+## 🚀 部署上线（手机可用，全程免费，约 10 分钟）
 
-1. 数据库切到 Postgres：把 `prisma/schema.prisma` 的 `provider` 改为 `postgresql`，`DATABASE_URL` 换成 Postgres 连接串（如 Vercel Postgres / Supabase）。
-2. 在 Vercel 配置环境变量（`ANTHROPIC_API_KEY`、`DATABASE_URL`、`CRON_SECRET` 等）。
-3. `vercel.json` 已配置每天 06:00 UTC 触发 `/api/cron`。
+目标：手机浏览器打开你的网址，每天自动出现三本新书。三个免费账号搞定：
+
+**第 1 步 · 数据库（Neon，免费）**
+1. 到 [neon.tech](https://neon.tech) 用 GitHub 登录，创建一个项目
+2. 复制它给你的 `DATABASE_URL` 连接串
+
+**第 2 步 · LLM（Groq，免费）**
+1. 到 [console.groq.com](https://console.groq.com) 免费注册
+2. 创建一个 API Key（云端没有 Ollama，所以用 Groq 的免费额度，速度还快）
+
+**第 3 步 · 部署（Vercel，免费）**
+1. 到 [vercel.com](https://vercel.com) 用 GitHub 登录 → **Add New Project** → 选这个仓库（分支选 `claude/book-summary-app-plan-n02vpw` 或先合并到 main）
+2. 在 **Environment Variables** 填 4 个变量：
+   | 变量 | 值 |
+   |---|---|
+   | `DATABASE_URL` | 第 1 步的 Neon 连接串 |
+   | `LLM_PROVIDER` | `groq` |
+   | `GROQ_API_KEY` | 第 2 步的 key |
+   | `CRON_SECRET` | 随便一串密码 |
+3. 点 Deploy，等 2 分钟拿到 `https://xxx.vercel.app`
+4. 初始化数据库表（本机执行一次）：
+   ```bash
+   DATABASE_URL="你的Neon连接串" npx prisma db push
+   ```
+
+**完成后：**
+- 📱 手机打开 `https://xxx.vercel.app`，加到主屏幕就像个 App
+- ⏰ `vercel.json` 已配置每天 06:00 UTC（北京时间 14:00）自动跑 `/api/cron` 生成当天三本；想改时间就改 `vercel.json` 里的 cron 表达式（如 `0 22 * * *` = 北京早上 6 点）
+- 第一次不想等定时任务：打开网站点一次「生成今日三本」即可
 
 ## 路线图
 
