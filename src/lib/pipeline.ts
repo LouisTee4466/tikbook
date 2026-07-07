@@ -3,8 +3,14 @@ import { BOOK_POOL, type PoolBook } from "@/data/bookPool";
 import { selectDaily } from "@/lib/select";
 import type { SourceBook } from "@/lib/types";
 
+// 应用的“今天”按用户时区计算（默认马来西亚 UTC+8），
+// 这样凌晨 22:00 UTC 的定时任务生成的是马来西亚“明早”的日期，
+// 且用户白天手动触发与当天定时任务命中同一天（幂等）。
+const TZ_OFFSET_HOURS = Number(process.env.TZ_OFFSET_HOURS ?? 8);
+
 export function todayStr(now: Date): string {
-  return now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  const shifted = new Date(now.getTime() + TZ_OFFSET_HOURS * 3_600_000);
+  return shifted.toISOString().slice(0, 10); // YYYY-MM-DD（用户时区）
 }
 
 function poolToSource(p: PoolBook): SourceBook {
