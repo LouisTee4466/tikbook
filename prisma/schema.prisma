@@ -1,0 +1,74 @@
+// Tikbook data model.
+// MVP uses SQLite so the app runs locally with zero external services.
+// For production (Vercel + Postgres): change provider to "postgresql" and
+// DATABASE_URL to your Postgres connection string. The Json fields below
+// map cleanly to Postgres jsonb.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Book {
+  id          String   @id @default(cuid())
+  title       String
+  author      String
+  source      String // "gutenberg" | "googlebooks"
+  externalId  String // id within the source
+  coverUrl    String?
+  description String?
+  hasFullText Boolean  @default(false)
+  // Signals used for preference-based selection (stored as JSON arrays).
+  genres      Json     @default("[]")
+  topics      Json     @default("[]")
+  publishYear Int?
+  createdAt   DateTime @default(now())
+
+  summary   Summary?
+  feedback  Feedback?
+  dailyPick DailyPickBook[]
+
+  @@unique([source, externalId])
+}
+
+model Summary {
+  id        String   @id @default(cuid())
+  bookId    String   @unique
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // 10 pages of structured summary: [{ page, title, body }]
+  pages     Json
+  model     String
+  createdAt DateTime @default(now())
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  bookId    String   @unique
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  value     String // "like" | "dislike"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A day's selection of 3 books.
+model DailyPick {
+  id        String          @id @default(cuid())
+  date      String          @unique // YYYY-MM-DD
+  createdAt DateTime        @default(now())
+  books     DailyPickBook[]
+}
+
+model DailyPickBook {
+  id          String    @id @default(cuid())
+  dailyPickId String
+  dailyPick   DailyPick @relation(fields: [dailyPickId], references: [id], onDelete: Cascade)
+  bookId      String
+  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  reason      String // "preference" | "exploration"
+  position    Int
+
+  @@unique([dailyPickId, bookId])
+}

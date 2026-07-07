@@ -1,0 +1,108 @@
+import Link from "next/link";
+import FeedbackButtons from "@/components/FeedbackButtons";
+import RunButton from "@/components/RunButton";
+import { getLatestDailyPick, getPreferenceStatus } from "@/lib/queries";
+
+export const dynamic = "force-dynamic";
+
+function TopBar() {
+  return (
+    <div className="topbar">
+      <div className="brand">
+        Tik<span>book</span>
+      </div>
+      <nav className="nav">
+        <Link href="/">今日</Link>
+        <Link href="/archive">归档</Link>
+      </nav>
+    </div>
+  );
+}
+
+function PreferenceBar({
+  ratedCount,
+  unlockThreshold,
+  personalized,
+  remaining,
+}: {
+  ratedCount: number;
+  unlockThreshold: number;
+  personalized: boolean;
+  remaining: number;
+}) {
+  const pct = Math.min(100, Math.round((ratedCount / unlockThreshold) * 100));
+  return (
+    <div className={`pref ${personalized ? "unlocked" : ""}`}>
+      {personalized ? (
+        <>✅ 个性化推荐已解锁 · 每日三本中 1 本按你的偏好挑选，2 本随机探索。</>
+      ) : (
+        <>
+          再评价 <b>{remaining}</b> 本书解锁个性化推荐（已评价 {ratedCount}/{unlockThreshold}）。
+          在此之前，每天都是随机去重选书。
+          <div className="bar">
+            <i style={{ width: `${pct}%` }} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default async function Home() {
+  const [pick, pref] = await Promise.all([getLatestDailyPick(), getPreferenceStatus()]);
+
+  return (
+    <div className="container">
+      <TopBar />
+      <PreferenceBar {...pref} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="section-title" style={{ margin: 0 }}>
+          {pick ? `${pick.date} · 今日三本` : "还没有今日选书"}
+        </div>
+        <RunButton hasPick={Boolean(pick)} />
+      </div>
+
+      {!pick ? (
+        <div className="empty">
+          点击右上角「生成今日三本」开始。
+          <br />
+          （需要先在 <code>.env</code> 里配置 <code>ANTHROPIC_API_KEY</code>）
+        </div>
+      ) : (
+        <div className="grid" style={{ marginTop: 16 }}>
+          {pick.books.map(({ book, reason }) => (
+            <div className="card" key={book.id}>
+              <Link href={`/book/${book.id}`} className="cover">
+                {book.coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={book.coverUrl} alt={book.title} />
+                ) : (
+                  <span>无封面</span>
+                )}
+              </Link>
+              <div className="body">
+                <span className={`tag ${reason === "preference" ? "pref" : ""}`}>
+                  {reason === "preference" ? "偏好推荐" : "探索发现"}
+                </span>
+                <Link href={`/book/${book.id}`} className="title">
+                  {book.title}
+                </Link>
+                <span className="author">{book.author}</span>
+                <div className="foot">
+                  <FeedbackButtons
+                    bookId={book.id}
+                    initial={(book.feedback?.value as "like" | "dislike") ?? null}
+                  />
+                  <Link href={`/book/${book.id}`} style={{ fontSize: 13, color: "var(--accent)" }}>
+                    阅读 10 页 →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
