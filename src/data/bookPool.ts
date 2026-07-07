@@ -80,6 +80,18 @@ export const BOOK_POOL: PoolBook[] = [
   b("no-rules-rules", "不拘一格 (No Rules Rules)", "Reed Hastings & Erin Meyer", 2020, ["管理", "商业"], ["网飞", "企业文化"], "网飞的自由与责任文化如何炼成"),
   b("psychology-of-money", "金钱心理学 (The Psychology of Money)", "Morgan Housel", 2020, ["商业", "理财"], ["财富观", "行为金融"], "与金钱相处的智慧比金融知识更重要"),
 
+  // ================= 营销 =================
+  b("positioning", "定位 (Positioning)", "Al Ries & Jack Trout", 1981, ["商业", "营销"], ["心智", "品牌"], "占领用户心智：现代营销最具影响力的定位理论"),
+  b("purple-cow", "紫牛 (Purple Cow)", "Seth Godin", 2003, ["商业", "营销"], ["差异化", "产品"], "平庸即隐形：做一头让人忍不住谈论的紫牛"),
+  b("this-is-marketing", "这就是营销 (This Is Marketing)", "Seth Godin", 2018, ["商业", "营销"], ["最小可行市场", "信任"], "营销不是打扰而是服务：为最小可行市场创造改变"),
+  b("contagious", "疯传 (Contagious)", "Jonah Berger", 2013, ["商业", "营销"], ["口碑", "病毒传播"], "STEPPS六原则：让产品和想法像病毒一样传播"),
+  b("ogilvy-advertising", "奥格威谈广告 (Ogilvy on Advertising)", "David Ogilvy", 1983, ["商业", "营销"], ["广告", "文案"], "广告教父的创意与文案圣经"),
+  b("22-immutable-laws", "22条商规 (The 22 Immutable Laws of Marketing)", "Al Ries & Jack Trout", 1993, ["商业", "营销"], ["营销法则"], "违背必受罚的22条营销铁律"),
+  b("building-storybrand", "你的品牌需要一个好故事 (Building a StoryBrand)", "Donald Miller", 2017, ["商业", "营销"], ["品牌故事", "文案框架"], "让顾客成为主角的SB7品牌故事框架"),
+  b("100m-offers", "百万美元级报价 ($100M Offers)", "Alex Hormozi", 2021, ["商业", "营销"], ["报价设计", "价值主张"], "打造好到无法拒绝的报价的价值方程式"),
+  b("growth-hacker-marketing", "增长黑客营销 (Growth Hacker Marketing)", "Ryan Holiday", 2014, ["商业", "营销"], ["增长", "数据驱动"], "用产品与数据替代预算的新营销心法"),
+  b("scientific-advertising", "科学的广告 (Scientific Advertising)", "Claude Hopkins", 1923, ["商业", "营销"], ["直效营销", "测试"], "一切广告皆可测试：百年不过时的营销源头经典"),
+
   // ================= 经济学 / 理财 =================
   b("rich-dad", "富爸爸穷爸爸 (Rich Dad Poor Dad)", "Robert Kiyosaki", 1997, ["理财"], ["财商", "资产"], "资产与负债之分：财商启蒙的全球畅销书"),
   b("intelligent-investor", "聪明的投资者 (The Intelligent Investor)", "Benjamin Graham", 1949, ["理财", "投资"], ["价值投资"], "价值投资圣经：市场先生与安全边际"),

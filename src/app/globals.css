@@ -127,10 +127,46 @@ a {
   color: var(--ink-soft);
   font-size: 13px;
 }
-.card .cover img {
+.cover-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+/* 生成式封面（无真实封面图时的兜底设计） */
+.gen-cover {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px 16px;
+  text-align: center;
+  font-family: var(--reader-font);
+}
+.gen-cover-rule {
+  width: 34px;
+  height: 3px;
+  opacity: 0.85;
+  border-radius: 2px;
+}
+.gen-cover-title {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.06em;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gen-cover-author {
+  font-size: 12.5px;
+  opacity: 0.82;
+  letter-spacing: 0.12em;
 }
 .card .body {
   padding: 14px 15px 16px;
@@ -159,6 +195,10 @@ a {
 .tag.pref {
   background: #f3ddd6;
   color: var(--accent);
+}
+.tag.biz {
+  background: #e3ecdd;
+  color: #3f6b3a;
 }
 .card .foot {
   margin-top: auto;
@@ -302,8 +342,8 @@ a {
   aspect-ratio: 2 / 3;
   border-radius: 8px;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
-  object-fit: cover;
   background: #ded7c7;
+  overflow: hidden;
 }
 .page.cover-page h1 {
   font-family: var(--reader-font);

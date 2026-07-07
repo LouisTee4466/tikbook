@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import BookCover from "@/components/BookCover";
 import FeedbackButtons from "@/components/FeedbackButtons";
 import type { SummaryPage } from "@/lib/types";
 
@@ -110,12 +111,9 @@ export default function Reader({
 
         {onCover ? (
           <div className="page cover-page">
-            {coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="big-cover" src={coverUrl} alt={title} />
-            ) : (
-              <div className="big-cover" />
-            )}
+            <div className="big-cover">
+              <BookCover title={title} author={author} coverUrl={coverUrl} />
+            </div>
             <h1>{title}</h1>
             <div className="author">{author}</div>
             <div style={{ marginTop: 8, color: "var(--ink-soft)", fontSize: 14 }}>

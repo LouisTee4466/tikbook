@@ -33,24 +33,60 @@ async function pickedKeys(): Promise<Set<string>> {
   return new Set(picked.map((p) => `${p.book.source}:${p.book.externalId}`));
 }
 
-// 封面：尽力从 Google Books 找一张；失败就无封面（不阻塞主流程）。
-async function tryFetchCover(book: SourceBook): Promise<string | undefined> {
+async function fetchWithTimeout(url: string, ms = 5000): Promise<Response | null> {
   try {
-    const q = encodeURIComponent(`${book.title.replace(/\s*\(.*\)$/, "")} ${book.author}`);
-    const key = process.env.GOOGLE_BOOKS_API_KEY;
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1${key ? `&key=${key}` : ""}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), ms);
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
-    if (!res.ok) return undefined;
-    const data = (await res.json()) as {
-      items?: { volumeInfo?: { imageLinks?: { thumbnail?: string } } }[];
-    };
-    return data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail?.replace("http://", "https://");
+    return res.ok ? res : null;
   } catch {
-    return undefined;
+    return null;
   }
+}
+
+// 书名常形如「中文名 (English Title)」——拆出两种叫法分别尝试搜索。
+function titleVariants(title: string): string[] {
+  const en = title.match(/[(（](.+?)[)）]\s*$/)?.[1]?.trim();
+  const zh = title.replace(/\s*[(（].*[)）]\s*$/, "").trim();
+  return [...new Set([en, zh, title].filter((t): t is string => Boolean(t)))];
+}
+
+async function googleCover(title: string, author: string): Promise<string | undefined> {
+  const key = process.env.GOOGLE_BOOKS_API_KEY;
+  const q = encodeURIComponent(`${title} ${author}`);
+  const res = await fetchWithTimeout(
+    `https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1${key ? `&key=${key}` : ""}`,
+  );
+  if (!res) return undefined;
+  const data = (await res.json()) as {
+    items?: { volumeInfo?: { imageLinks?: { thumbnail?: string } } }[];
+  };
+  return data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail?.replace("http://", "https://");
+}
+
+async function openLibraryCover(title: string): Promise<string | undefined> {
+  const res = await fetchWithTimeout(
+    `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=1&fields=cover_i`,
+  );
+  if (!res) return undefined;
+  const data = (await res.json()) as { docs?: { cover_i?: number }[] };
+  const id = data.docs?.[0]?.cover_i;
+  return id ? `https://covers.openlibrary.org/b/id/${id}-L.jpg` : undefined;
+}
+
+// 封面：Google Books（中英文书名各试一次）→ Open Library 兜底。
+// 全部失败时前端会渲染生成式封面（BookCover 组件），保证每本书都有封面。
+async function tryFetchCover(book: SourceBook): Promise<string | undefined> {
+  for (const t of titleVariants(book.title)) {
+    const g = await googleCover(t, book.author);
+    if (g) return g;
+  }
+  for (const t of titleVariants(book.title)) {
+    const o = await openLibraryCover(t);
+    if (o) return o;
+  }
+  return undefined;
 }
 
 export interface EnsureResult {

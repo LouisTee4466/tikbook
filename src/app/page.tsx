@@ -1,7 +1,9 @@
 import Link from "next/link";
+import BookCover from "@/components/BookCover";
 import FeedbackButtons from "@/components/FeedbackButtons";
 import RunButton from "@/components/RunButton";
 import { asPages, getLatestDailyPick, getPreferenceStatus } from "@/lib/queries";
+import { reasonTag } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -75,17 +77,10 @@ export default async function Home() {
           {pick.books.map(({ book, reason }) => (
             <div className="card" key={book.id}>
               <Link href={`/book/${book.id}`} className="cover">
-                {book.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={book.coverUrl} alt={book.title} />
-                ) : (
-                  <span>无封面</span>
-                )}
+                <BookCover title={book.title} author={book.author} coverUrl={book.coverUrl} />
               </Link>
               <div className="body">
-                <span className={`tag ${reason === "preference" ? "pref" : ""}`}>
-                  {reason === "preference" ? "偏好推荐" : "探索发现"}
-                </span>
+                <span className={`tag ${reasonTag(reason).cls}`}>{reasonTag(reason).label}</span>
                 <Link href={`/book/${book.id}`} className="title">
                   {book.title}
                 </Link>

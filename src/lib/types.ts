@@ -24,4 +24,4 @@ export interface SourceBook {
 }
 
 export type FeedbackValue = "like" | "dislike";
-export type PickReason = "preference" | "exploration";
+export type PickReason = "preference" | "exploration" | "business";

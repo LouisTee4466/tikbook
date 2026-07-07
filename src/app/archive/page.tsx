@@ -1,5 +1,7 @@
 import Link from "next/link";
+import BookCover from "@/components/BookCover";
 import { getArchive } from "@/lib/queries";
+import { reasonTag } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -30,17 +32,10 @@ export default async function ArchivePage() {
               {day.books.map(({ book, reason }) => (
                 <Link className="card" href={`/book/${book.id}`} key={book.id}>
                   <div className="cover">
-                    {book.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={book.coverUrl} alt={book.title} />
-                    ) : (
-                      <span>无封面</span>
-                    )}
+                    <BookCover title={book.title} author={book.author} coverUrl={book.coverUrl} />
                   </div>
                   <div className="body">
-                    <span className={`tag ${reason === "preference" ? "pref" : ""}`}>
-                      {reason === "preference" ? "偏好推荐" : "探索发现"}
-                    </span>
+                    <span className={`tag ${reasonTag(reason).cls}`}>{reasonTag(reason).label}</span>
                     <div className="title">{book.title}</div>
                     <span className="author">{book.author}</span>
                     {book.feedback && (

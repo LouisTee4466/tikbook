@@ -5,10 +5,17 @@ import type { PickReason, SourceBook } from "@/lib/types";
 // preference data is too sparse to be meaningful, so we pick purely at random.
 export const PREFERENCE_UNLOCK_THRESHOLD = 50;
 
-// Of the 3 daily books: 1 chosen by preference, 2 random exploration
-// (only once personalization is unlocked).
+// Of the 3 daily books: 1 is always business/marketing, 1 chosen by
+// preference (once unlocked), the rest random exploration.
 const PREFERENCE_SLOTS = 1;
 const TOTAL_SLOTS = 3;
+
+// 每天必须包含一本商业/营销类：命中这些分类即算。
+const BUSINESS_GENRES = new Set(["商业", "营销", "管理", "理财", "产品"]);
+
+function isBusiness(book: SourceBook): boolean {
+  return book.genres.some((g) => BUSINESS_GENRES.has(g));
+}
 
 export async function getRatedCount(): Promise<number> {
   return prisma.feedback.count();
@@ -77,23 +84,36 @@ export async function selectDaily(
   const pool = seededShuffle(candidates, seed);
   const ratedCount = await getRatedCount();
   const personalized = ratedCount >= PREFERENCE_UNLOCK_THRESHOLD;
+  const profile = personalized ? await buildPreferenceProfile() : null;
 
   const selections: Selection[] = [];
   const used = new Set<string>();
   const keyOf = (b: SourceBook) => `${b.source}:${b.externalId}`;
 
-  if (personalized) {
-    const profile = await buildPreferenceProfile();
+  // 1) 商业/营销保底位：解锁个性化后按偏好在商业书里挑，否则随机。
+  const bizPool = pool.filter(isBusiness);
+  if (bizPool.length > 0) {
+    const biz = profile
+      ? [...bizPool].sort((a, b) => scoreBook(b, profile) - scoreBook(a, profile))[0]
+      : bizPool[0];
+    used.add(keyOf(biz));
+    selections.push({ book: biz, reason: "business" });
+  }
+
+  // 2) 偏好位（解锁后）
+  if (profile) {
     const ranked = [...pool].sort((a, b) => scoreBook(b, profile) - scoreBook(a, profile));
+    let added = 0;
     for (const book of ranked) {
-      if (selections.length >= PREFERENCE_SLOTS) break;
+      if (added >= PREFERENCE_SLOTS) break;
       if (used.has(keyOf(book))) continue;
       used.add(keyOf(book));
       selections.push({ book, reason: "preference" });
+      added++;
     }
   }
 
-  // Fill the rest with random exploration picks.
+  // 3) 探索位补满 3 本
   for (const book of pool) {
     if (selections.length >= TOTAL_SLOTS) break;
     if (used.has(keyOf(book))) continue;
